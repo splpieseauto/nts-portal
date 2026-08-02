@@ -107,12 +107,16 @@ textarea{resize:vertical;min-height:82px;line-height:1.5;}
 .ti-item:last-child{border-right:none;}
 .ti-item:hover{background:rgba(0,170,255,.05);}
 .ti-item.sel{background:rgba(240,165,0,.08);}
+.ti-item.leave{opacity:.48;cursor:not-allowed;background:rgba(255,68,85,.06);}
+.ti-item.leave:hover{background:rgba(255,68,85,.08);}
+.ti-item.leave .av{background:linear-gradient(135deg,#4a1f2a,#8a2d3e);box-shadow:none;}
 .av{width:28px;height:28px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#003d80,#0066cc);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-size:.68rem;font-weight:700;color:#fff;transition:all .2s;}
 .ti-item.primary .av{background:linear-gradient(135deg,#002060,#004499);box-shadow:0 0 0 2px rgba(0,170,255,.2);}
 .ti-item.sel .av{background:linear-gradient(135deg,#7a4d00,var(--gold));}
 .tn{font-size:.8rem;font-weight:500;color:var(--dim);transition:color .2s;line-height:1.2;}
 .ti-item.sel .tn{color:var(--gold);}
 .star{font-size:.6rem;color:var(--gold);margin-left:3px;}
+.leave-badge{display:inline-block;margin-left:6px;padding:1px 6px;border:1px solid rgba(255,68,85,.45);border-radius:999px;color:#ff7b8b;font-size:.55rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;vertical-align:middle;}
 .sn{padding:9px 11px 11px;background:rgba(255,180,0,.05);border-top:1px solid rgba(255,180,0,.2);}
 .sn.hidden{display:none;}
 .sn-hdr{display:flex;align-items:flex-start;gap:6px;font-size:.75rem;color:#c49010;line-height:1.4;margin-bottom:5px;}
@@ -988,6 +992,8 @@ function initApp() {
     {weekday:'long', day:'numeric', month:'long', year:'numeric'});
   const now = new Date();
   document.getElementById('reportDate').value = now.toISOString().split('T')[0];
+  const reportDateEl = document.getElementById('reportDate');
+  if (reportDateEl) reportDateEl.addEventListener('change', () => rebuildTechUI());
   buildTech(); buildPills(); buildMonths();
   buildTechDropdowns();
   syncAll(); injectMF();
@@ -1218,6 +1224,53 @@ async function apiCall(method, params) {
 // ╔══════════════════════════════════════════╗
 // ║  PAGE 0 — BUILD FORM                     ║
 // ╚══════════════════════════════════════════╝
+function techDateOnly(value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (value instanceof Date && !isNaN(value)) return value.toISOString().slice(0, 10);
+  const s = String(value).trim();
+  if (!s) return '';
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ro = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
+  if (ro) {
+    const y = ro[3].length === 2 ? '20' + ro[3] : ro[3];
+    return `${y}-${String(ro[2]).padStart(2,'0')}-${String(ro[1]).padStart(2,'0')}`;
+  }
+  const d = new Date(s);
+  return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+}
+
+function techIsFalse(value) {
+  const s = String(value ?? '').trim().toLowerCase();
+  return ['nu','no','false','0','inactiv','inactive','indisponibil'].includes(s);
+}
+
+function techIsOnLeave(t, dateValue) {
+  const day = techDateOnly(dateValue || document.getElementById('reportDate')?.value || new Date());
+  const status = String(t.status || '').trim().toLowerCase();
+  const start = techDateOnly(t.concediuStart || t.leaveStart || t.start);
+  const end = techDateOnly(t.concediuEnd || t.leaveEnd || t.end);
+  const hasLeaveStatus = ['concediu','vacanta','vacanță','inactiv','indisponibil','liber'].some(v => status.includes(v));
+  const inactive = techIsFalse(t.activ);
+
+  if (start || end) {
+    if (!day) return hasLeaveStatus || inactive;
+    const afterStart = !start || day >= start;
+    const beforeEnd = !end || day <= end;
+    return (hasLeaveStatus || inactive || start || end) && afterStart && beforeEnd;
+  }
+  return hasLeaveStatus || inactive;
+}
+
+function techLeaveLabel(t) {
+  const start = techDateOnly(t.concediuStart || t.leaveStart || t.start);
+  const end = techDateOnly(t.concediuEnd || t.leaveEnd || t.end);
+  if (start && end) return `Concediu ${start} - ${end}`;
+  if (start) return `Concediu din ${start}`;
+  if (end) return `Concediu pana la ${end}`;
+  return 'Concediu';
+}
+
 function buildTech() {
   const g = document.getElementById('techGrid');
   const tm = {};
@@ -1229,11 +1282,22 @@ function buildTech() {
     const r = document.createElement('div'); r.className='tmembers';
     ms.forEach(t => {
       const d = document.createElement('div');
-      d.className='ti-item'+(t.pri?' primary':'');
+      const onLeave = techIsOnLeave(t);
+      d.className='ti-item'+(t.pri?' primary':'')+(onLeave?' leave':'');
       d.dataset.name=t.name; d.dataset.team=tn;
+      if (onLeave) d.title = techLeaveLabel(t);
       d.innerHTML=`<div class="av">${t.ini}</div>
         <div class="tn">${t.name}${t.pri?'<span class="star">★</span>':''}</div>`;
-      d.onclick=()=>togT(d,t.name,tn,t.pri);
+      if (onLeave) {
+        const badge = document.createElement('span');
+        badge.className = 'leave-badge';
+        badge.textContent = 'Concediu';
+        d.querySelector('.tn')?.appendChild(badge);
+      }
+      d.onclick=()=>{
+        if (techIsOnLeave(t)) { toast(t.name + ' este in concediu si nu poate fi selectat la raport.', true); return; }
+        togT(d,t.name,tn,t.pri);
+      };
       r.appendChild(d);
     });
     w.appendChild(r);
@@ -1347,7 +1411,11 @@ function applyTehnicieniFromSheet(list) {
       team: String(t.team).trim(),
       ini:  String(t.ini || '').trim() ||
             String(t.name).trim().split(/\s+/).map(p => p[0]||'').join('').substring(0,2).toUpperCase(),
-      pri:  !!t.pri
+      pri:  !!t.pri,
+      status: String(t.status || '').trim(),
+      activ: t.activ,
+      concediuStart: t.concediuStart || t.leaveStart || '',
+      concediuEnd: t.concediuEnd || t.leaveEnd || ''
     }));
   if (cleaned.length === 0) return false;
   TECHS = cleaned;
@@ -1386,6 +1454,15 @@ async function submitRep() {
   if(!selTechs.size){toast('Selectează tehnicieni!',true);return;}
   if(!selWork){toast('Selectează tipul lucrării!',true);return;}
   if(!stVal){toast('Selectează statusul!',true);return;}
+
+  const blockedTechs = TECHS.filter(t => selTechs.has(t.name) && techIsOnLeave(t, dt)).map(t => t.name);
+  if(blockedTechs.length){
+    blockedTechs.forEach(n => selTechs.delete(n));
+    document.getElementById('selTechs').value=[...selTechs].join(', ');
+    rebuildTechUI();
+    toast('Nu se poate trimite raportul: ' + blockedTechs.join(', ') + ' este/sunt in concediu.', true);
+    return;
+  }
 
   const subs=[];
   ['Echipa1','Echipa2','Echipa3','Echipa4'].forEach(k=>{
