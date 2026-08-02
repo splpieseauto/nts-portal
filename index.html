@@ -1231,7 +1231,7 @@ function techDateOnly(value) {
   if (!s) return '';
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const ro = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
+  const ro = s.match(/^(\d{1,2})[\s.\/-]+(\d{1,2})[\s.\/-]+(\d{2,4})$/);
   if (ro) {
     const y = ro[3].length === 2 ? '20' + ro[3] : ro[3];
     return `${y}-${String(ro[2]).padStart(2,'0')}-${String(ro[1]).padStart(2,'0')}`;
