@@ -2987,7 +2987,7 @@ async function loadFleet(silent){
     const res=await apiCall('GET',{action:'getFleetData',email:authUser.email,name:authUser.name||''});
     alert('DEBUG loadFleet: răspuns primit, ok=' + res?.ok + ' vehicles=' + (res?.data?.vehicles?.length||0) + ' myVehicle=' + (res?.data?.myVehicle?.registration||'null'));
     if(!res||!res.ok)throw new Error(res?.error||'Nu s-a putut încărca flota');
-    fleetData=res.data||fleetData; renderFleet();
+    fleetData=res.data||fleetData; try{renderFleet();}catch(renderErr){alert('DEBUG renderFleet EROARE: '+renderErr.message+'\n'+renderErr.stack);}
     const n=(fleetData.alerts||[]).length, bd=document.getElementById('fleetTabBadge'); if(bd){bd.textContent=n;bd.style.display=n?'inline-flex':'none';}
     if(n&&!silent&&sessionStorage.getItem('ntsFleetAlertShown')!=='1'){sessionStorage.setItem('ntsFleetAlertShown','1');toast('⚠ Ai '+n+' notificări pentru mașina asignată.',false,true);}
   }catch(e){document.getElementById('fleetAlerts').innerHTML=`<div class="fleet-alert danger"><strong>Eroare flotă</strong><small>${escapeHtml(e.message)}</small></div>`;}
