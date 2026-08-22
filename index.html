@@ -946,7 +946,7 @@ canvas#sigCanvas{display:block;width:100%;height:160px;cursor:crosshair;}
           <button class="active" onclick="fleetPane('vehicles',this)">Mașini</button><button onclick="fleetPane('fuel',this)">Alimentări</button><button onclick="fleetPane('service',this)">Revizii & reparații</button><button onclick="fleetPane('docs',this)">ITP & asigurări</button>
         </div>
         <div class="fleet-pane active" id="fleetPane-vehicles">
-          <div class="fleet-form"><div class="fleet-row"><div><label>Nr. înmatriculare *</label><input id="fvReg" placeholder="B-123-NTS"></div><div><label>Marcă / Model</label><input id="fvModel" placeholder="Ford Transit Custom"></div></div><div class="fleet-row"><div><label>VIN</label><input id="fvVin"></div><div><label>KM actuali</label><input id="fvKm" type="number" inputmode="numeric"></div></div><div class="fleet-row"><div><label>Șofer asignat (email)</label><input id="fvDriver" type="email" placeholder="sofer@firma.ro"></div><div><label>Nume șofer</label><input id="fvDriverName" placeholder="Nume Prenume"></div></div><div class="fleet-row"><div><label>Interval revizie ulei + filtre (km)</label><input id="fvServiceEvery" type="number" value="10000"></div><div><label>Următoarea revizie la KM</label><input id="fvNextServiceKm" type="number"></div></div><button class="fleet-save" onclick="saveFleetVehicle()">Adaugă / actualizează mașina</button></div>
+          <div class="fleet-form"><div class="fleet-row"><div><label>Nr. înmatriculare *</label><input id="fvReg" placeholder="B-123-NTS"></div><div><label>Marcă / Model</label><input id="fvModel" placeholder="Ford Transit Custom"></div></div><div class="fleet-row"><div><label>VIN</label><input id="fvVin"></div><div><label>KM actuali</label><input id="fvKm" type="number" inputmode="numeric"></div></div><div><label>Nume șofer asignat</label><input id="fvDriverName" placeholder="Nume Prenume"></div><div class="fleet-row"><div><label>Interval revizie ulei + filtre (km)</label><input id="fvServiceEvery" type="number" value="10000"></div><div><label>Următoarea revizie la KM</label><input id="fvNextServiceKm" type="number"></div></div><button class="fleet-save" onclick="saveFleetVehicle()">Adaugă / actualizează mașina</button></div>
           <div id="fleetVehiclesList" class="fleet-section"></div>
         </div>
         <div class="fleet-pane" id="fleetPane-fuel"><div id="fleetFuelList"></div></div>
@@ -1010,7 +1010,6 @@ let fleetReceiptData = '';
 let fleetAutoLoadStarted = false;
 let fleetSyncTimer = null;
 let fleetSyncInFlight = false;
-let fleetAdminCheckInFlight = false;
 let gData = { rapoarte:[], plan_url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRLEHiuD5sC3CtFx_vlHt9Cdg0q-XmmyQekp2-AUoysdUqVSMAFAzf8Xo4k337GYw/pubhtml', pontaj_url:'', mesaje:{} };
 
 // ╔══════════════════════════════════════════╗
@@ -1049,7 +1048,7 @@ function sw(i, btn) {
   // Refresh relevant tab
   if(i===1) renderPlan();
   if(i===3) renderP();
-  if(i===4){ensureFleetAdminVisible();loadFleet();}
+  if(i===4) loadFleet();
 }
 
 // ╔══════════════════════════════════════════╗
@@ -2643,11 +2642,8 @@ let authUser  = null;
 
 function isFleetAdmin() {
   const email = String(authUser?.email || '').trim().toLowerCase();
-  const adminChip = document.getElementById('admChip');
-  const adminChipVisible = !!adminChip && getComputedStyle(adminChip).display !== 'none';
   return fleetData?.isAdmin === true ||
          email === String(ADMIN_MAIL || '').trim().toLowerCase() ||
-         adminChipVisible ||
          authUser?.isAdmin === true ||
          String(authUser?.role || '').trim().toLowerCase() === 'admin';
 }
@@ -2996,12 +2992,10 @@ function daysUntil(v){if(!v)return null; const d=new Date(v+'T23:59:59'); return
 function normalizeFleetVehicle(v){
   v=v||{};
   return {
-    id:v.id||v.ID||'',
     registration:v.registration||v.Registration||'',
     model:v.model||v.Model||'',
     vin:v.vin||v.VIN||'',
     currentKm:Number(v.currentKm||v.CurrentKm||0),
-    driverEmail:v.driverEmail||v.DriverEmail||'',
     driverName:v.driverName||v.DriverName||'',
     serviceEveryKm:Number(v.serviceEveryKm||v.ServiceEveryKm||0),
     nextServiceKm:Number(v.nextServiceKm||v.NextServiceKm||0),
@@ -3012,34 +3006,14 @@ function vehicleLabel(v){v=normalizeFleetVehicle(v);return `${v.registration||'�
 function fleetServiceTypeChanged(){const t=document.getElementById('fsType')?.value||'';const km=Number(document.getElementById('fsKm')?.value||0);const next=document.getElementById('fsNextKm');if(!next)return;if(t==='Revizie ulei + filtre'){next.disabled=false;next.placeholder='Automat: KM revizie + 10.000';if(km)next.value=km+10000;}else{next.value='';next.disabled=true;next.placeholder='Nu se modifică la reparații';}}
 document.getElementById('fsKm')?.addEventListener('input',()=>{if(document.getElementById('fsType')?.value==='Revizie ulei + filtre')fleetServiceTypeChanged();});
 function populateFleetVehicleSelects(){
-  const vehicles=(fleetData.vehicles||[]).map(normalizeFleetVehicle).filter(v=>v.id||v.registration);
+  const vehicles=(fleetData.vehicles||[]).map(normalizeFleetVehicle).filter(v=>v.registration);
   ['fsVehicle','fdVehicle','fuelVehicle'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
     const previous=el.value;
-    el.innerHTML='<option value="">Selectează mașina</option>'+vehicles.map(v=>`<option value="${escapeHtml(v.id||v.registration)}">${escapeHtml(vehicleLabel(v))}</option>`).join('');
-    if(previous&&vehicles.some(v=>(v.id||v.registration)===previous))el.value=previous;
-    else if(id==='fuelVehicle'&&vehicles.length)el.value=vehicles[0].id||vehicles[0].registration;
+    el.innerHTML='<option value="">Selectează mașina</option>'+vehicles.map(v=>`<option value="${escapeHtml(v.registration)}">${escapeHtml(vehicleLabel(v))}</option>`).join('');
+    if(previous&&vehicles.some(v=>v.registration===previous))el.value=previous;
+    else if(id==='fuelVehicle'&&vehicles.length)el.value=vehicles[0].registration;
   });
-}
-async function ensureFleetAdminVisible(){
-  if(!authUser||isFleetAdmin()||fleetAdminCheckInFlight)return isFleetAdmin();
-  fleetAdminCheckInFlight=true;
-  try{
-    const res=await apiCall('GET',{action:'checkStatus',email:authUser.email,_:Date.now()});
-    if(String(res?.role||'').trim().toLowerCase()==='admin'){
-      fleetData.isAdmin=true;
-      document.getElementById('fleetAdminArea')?.classList.add('visible');
-      document.getElementById('fuelAdminVehicleWrap')?.classList.add('visible');
-      populateFleetVehicleSelects();
-      renderFleetAdmin();
-      return true;
-    }
-  }catch(e){
-    console.warn('NTS fleet admin check failed',e.message);
-  }finally{
-    fleetAdminCheckInFlight=false;
-  }
-  return isFleetAdmin();
 }
 function startFleetAutoLoad(){
   if(fleetAutoLoadStarted)return;
@@ -3074,7 +3048,6 @@ async function loadFleet(silent){
     setTimeout(()=>loadFleet(silent),500);
     return;
   }
-  await ensureFleetAdminVisible();
   try{
     const res=await apiCall('GET',{action:'getFleetData',email:authUser.email,name:authUser.name||'',_:Date.now()});
     if(!res||!res.ok)throw new Error(res?.error||'Nu s-a putut încărca flota');
@@ -3087,7 +3060,7 @@ async function loadFleet(silent){
   }catch(e){
     if(box)box.innerHTML=`<div><div class="fleet-reg">Flota nu s-a încărcat</div><div class="fleet-meta">${escapeHtml(e.message)}</div></div>`;
     if(alertsBox)alertsBox.innerHTML=`<div class="fleet-alert danger"><strong>Eroare flotă</strong><small>${escapeHtml(e.message)}</small></div>`;
-    const adm=await ensureFleetAdminVisible();
+    const adm=isFleetAdmin();
     document.getElementById('fleetAdminArea')?.classList.toggle('visible',adm);
     document.getElementById('fuelAdminVehicleWrap')?.classList.toggle('visible',adm);
   }
@@ -3096,12 +3069,12 @@ function renderFleet(){
   const adm=isFleetAdmin();
   if(adm)populateFleetVehicleSelects();
   const selectedFleetId=document.getElementById('fuelVehicle')?.value||'';
-  const selectedFleetVehicle=(fleetData.vehicles||[]).map(normalizeFleetVehicle).find(x=>selectedFleetId&&(x.id===selectedFleetId||x.registration===selectedFleetId));
+  const selectedFleetVehicle=(fleetData.vehicles||[]).map(normalizeFleetVehicle).find(x=>selectedFleetId&&x.registration===selectedFleetId);
   const v=selectedFleetVehicle||fleetData.myVehicle||null, box=document.getElementById('fleetMyVehicle');
-  if(box) box.innerHTML=v?`<div><div class="fleet-reg">${escapeHtml(v.registration||'—')}</div><div class="fleet-meta">${escapeHtml(v.model||(adm?'Mașina selectată':'Mașina asignată'))} · ${Number(v.currentKm||0).toLocaleString('ro-RO')} km</div></div><span class="fleet-badge">${escapeHtml(adm?'Admin':(v.driverName||authUser?.name||'Șofer'))}</span>`:(adm?`<div><div class="fleet-reg">Nicio mașină în flotă</div><div class="fleet-meta">Adaugă o mașină din administrare.</div></div>`:`<div><div class="fleet-reg">Nicio mașină asignată</div><div class="fleet-meta">Verifică în Administrare flotă ca emailul șoferului să fie exact ${escapeHtml(authUser?.email||'emailul tehnicianului')}.</div></div>`);
+  if(box) box.innerHTML=v?`<div><div class="fleet-reg">${escapeHtml(v.registration||'—')}</div><div class="fleet-meta">${escapeHtml(v.model||(adm?'Mașina selectată':'Mașina asignată'))} · ${Number(v.currentKm||0).toLocaleString('ro-RO')} km</div></div><span class="fleet-badge">${escapeHtml(adm?'Admin':(v.driverName||authUser?.name||'Șofer'))}</span>`:(adm?`<div><div class="fleet-reg">Nicio mașină în flotă</div><div class="fleet-meta">Adaugă o mașină din administrare.</div></div>`:`<div><div class="fleet-reg">Nicio mașină asignată</div><div class="fleet-meta">Verifică în Administrare flotă ca numele șoferului să fie identic cu numele tehnicianului.</div></div>`);
   document.getElementById('fkKm').textContent=v?Number(v.currentKm||0).toLocaleString('ro-RO'):'—';
   const rem=v&&v.nextServiceKm?Number(v.nextServiceKm)-Number(v.currentKm||0):null; document.getElementById('fkService').textContent=rem==null?'—':(rem<=0?'SCADENT':rem.toLocaleString('ro-RO')+' km');
-  const docs=(fleetData.documents||[]).filter(d=>v&&(d.vehicleId===v.id||d.registration===v.registration));
+  const docs=(fleetData.documents||[]).filter(d=>v&&d.registration===v.registration);
   const itp=docs.filter(d=>String(d.type).toUpperCase()==='ITP').sort((a,b)=>String(b.expiry).localeCompare(String(a.expiry)))[0];
   const rca=docs.filter(d=>String(d.type).toUpperCase()==='RCA').sort((a,b)=>String(b.expiry).localeCompare(String(a.expiry)))[0];
   document.getElementById('fkItp').textContent=itp?fmtFleetDate(itp.expiry):'—'; document.getElementById('fkRca').textContent=rca?fmtFleetDate(rca.expiry):'—';
@@ -3112,30 +3085,30 @@ function renderFleet(){
   if(adm){renderFleetAdmin();}
 }
 function renderFleetAdmin(){
-  const vl=document.getElementById('fleetVehiclesList'); if(vl)vl.innerHTML=(fleetData.vehicles||[]).length?fleetData.vehicles.map(v=>`<div class="fleet-vehicle"><div><div class="fleet-reg">${escapeHtml(v.registration)}</div><div class="fleet-meta">${escapeHtml(v.model||'')} · ${Number(v.currentKm||0).toLocaleString('ro-RO')} km<br>Șofer: ${escapeHtml(v.driverName||v.driverEmail||'neasignat')} · Revizie: ${v.nextServiceKm?Number(v.nextServiceKm).toLocaleString('ro-RO')+' km':'—'}</div></div></div>`).join(''):'<div class="fleet-empty">Nicio mașină.</div>';
-  const fl=document.getElementById('fleetFuelList'); if(fl)fl.innerHTML=makeFleetTable(['Data','Mașină','Șofer','KM','Litri','Valoare','Bon'],(fleetData.fuel||[]).slice().reverse().slice(0,100).map(x=>[fmtFleetDate(x.timestamp),x.registration||'',x.driverName||x.driverEmail||'',Number(x.km||0).toLocaleString('ro-RO'),x.liters||'—',x.amount?x.amount+' EUR':'—',x.receiptUrl?`<a href="${x.receiptUrl}" target="_blank" style="color:var(--gold)">Vezi</a>`:'—']));
+  const vl=document.getElementById('fleetVehiclesList'); if(vl)vl.innerHTML=(fleetData.vehicles||[]).length?fleetData.vehicles.map(v=>`<div class="fleet-vehicle"><div><div class="fleet-reg">${escapeHtml(v.registration)}</div><div class="fleet-meta">${escapeHtml(v.model||'')} · ${Number(v.currentKm||0).toLocaleString('ro-RO')} km<br>Șofer: ${escapeHtml(v.driverName||'neasignat')} · Revizie: ${v.nextServiceKm?Number(v.nextServiceKm).toLocaleString('ro-RO')+' km':'—'}</div></div></div>`).join(''):'<div class="fleet-empty">Nicio mașină.</div>';
+  const fl=document.getElementById('fleetFuelList'); if(fl)fl.innerHTML=makeFleetTable(['Data','Mașină','Șofer','KM','Litri','Valoare','Bon'],(fleetData.fuel||[]).slice().reverse().slice(0,100).map(x=>[fmtFleetDate(x.timestamp),x.registration||'',x.driverName||'',Number(x.km||0).toLocaleString('ro-RO'),x.liters||'—',x.amount?x.amount+' EUR':'—',x.receiptUrl?`<a href="${x.receiptUrl}" target="_blank" style="color:var(--gold)">Vezi</a>`:'—']));
   const sl=document.getElementById('fleetServiceList'); if(sl)sl.innerHTML=makeFleetTable(['Data','Mașină','Tip','KM','Cost','Detalii'],(fleetData.service||[]).slice().reverse().map(x=>[fmtFleetDate(x.date),x.registration||'',x.type||'',Number(x.km||0).toLocaleString('ro-RO'),x.cost?x.cost+' EUR':'—',x.notes||'']));
   const dl=document.getElementById('fleetDocsList'); if(dl)dl.innerHTML=makeFleetTable(['Mașină','Document','Expiră','Status','Observații'],(fleetData.documents||[]).map(x=>{const d=daysUntil(x.expiry);return[x.registration||'',x.type||'',fmtFleetDate(x.expiry),d==null?'—':(d<0?'EXPIRAT':d+' zile'),x.notes||''];}));
 }
 function makeFleetTable(h,rows){if(!rows.length)return '<div class="fleet-empty">Nu există înregistrări.</div>';return `<div style="overflow:auto"><table class="fleet-table"><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(x=>`<td>${x??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;}
 async function saveQuickFuel(){
   const km=Number(document.getElementById('fuelKm').value||0), adm=isFleetAdmin(), selectedId=document.getElementById('fuelVehicle')?.value||'';
-  const selectedVehicle=adm?(fleetData.vehicles||[]).map(normalizeFleetVehicle).find(v=>selectedId&&(v.id===selectedId||v.registration===selectedId)):fleetData.myVehicle;
+  const selectedVehicle=adm?(fleetData.vehicles||[]).map(normalizeFleetVehicle).find(v=>selectedId&&v.registration===selectedId):fleetData.myVehicle;
   if(!selectedVehicle)return toast(adm?'Selectează mașina.':'Nu ai o mașină asignată.',true); if(!km)return toast('Introdu kilometrii actuali.',true); if(!fleetReceiptData)return toast('Fotografia bonului este obligatorie.',true); if(km<Number(selectedVehicle.currentKm||0))return toast('KM nu pot fi mai mici decât ultimul kilometraj.',true);
-  const b=document.getElementById('fuelSaveBtn');b.disabled=true;b.textContent='Se salvează…'; try{const res=await apiCall('POST',{action:'saveFuel',email:authUser.email,name:authUser.name||'',vehicleId:selectedVehicle.id||selectedVehicle.registration,km,liters:document.getElementById('fuelLiters').value,amount:document.getElementById('fuelAmount').value,receiptData:fleetReceiptData});if(!res?.ok)throw new Error(res?.error||'Eroare');toast('✅ Alimentarea a fost salvată.');document.getElementById('fuelKm').value='';document.getElementById('fuelLiters').value='';document.getElementById('fuelAmount').value='';document.getElementById('fuelReceipt').value='';document.getElementById('fuelReceiptPreview').style.display='none';fleetReceiptData='';await syncFleet(true,true);}catch(e){toast('Eroare: '+e.message,true);}finally{b.disabled=false;b.textContent='Salvează alimentarea';}
+  const b=document.getElementById('fuelSaveBtn');b.disabled=true;b.textContent='Se salvează…'; try{const res=await apiCall('POST',{action:'saveFuel',email:authUser.email,name:authUser.name||'',registration:selectedVehicle.registration,km,liters:document.getElementById('fuelLiters').value,amount:document.getElementById('fuelAmount').value,receiptData:fleetReceiptData});if(!res?.ok)throw new Error(res?.error||'Eroare');toast('✅ Alimentarea a fost salvată.');document.getElementById('fuelKm').value='';document.getElementById('fuelLiters').value='';document.getElementById('fuelAmount').value='';document.getElementById('fuelReceipt').value='';document.getElementById('fuelReceiptPreview').style.display='none';fleetReceiptData='';await syncFleet(true,true);}catch(e){toast('Eroare: '+e.message,true);}finally{b.disabled=false;b.textContent='Salvează alimentarea';}
 }
-async function saveFleetVehicle(){const p={action:'saveVehicle',adminEmail:authUser.email,registration:document.getElementById('fvReg').value,model:document.getElementById('fvModel').value,vin:document.getElementById('fvVin').value,currentKm:document.getElementById('fvKm').value,driverEmail:document.getElementById('fvDriver').value,driverName:document.getElementById('fvDriverName').value,serviceEveryKm:document.getElementById('fvServiceEvery').value,nextServiceKm:document.getElementById('fvNextServiceKm').value}; await fleetAdminSave(p,'Mașina a fost salvată.');}
-async function saveFleetService(){const type=document.getElementById('fsType').value;const km=Number(document.getElementById('fsKm').value||0);if(!document.getElementById('fsVehicle').value)return toast('Selectează mașina.',true);if(!document.getElementById('fsDate').value)return toast('Introdu data intervenției.',true);if(!km)return toast('Introdu kilometrajul la care s-a făcut intervenția.',true);if(type==='Revizie ulei + filtre')document.getElementById('fsNextKm').value=km+10000;const p={action:'saveFleetService',adminEmail:authUser.email,vehicleId:document.getElementById('fsVehicle').value,type,date:document.getElementById('fsDate').value,km,cost:document.getElementById('fsCost').value,nextKm:document.getElementById('fsNextKm').value,notes:document.getElementById('fsNotes').value};await fleetAdminSave(p,type==='Revizie ulei + filtre'?'Revizia a fost salvată. Următoarea este la '+(km+10000).toLocaleString('ro-RO')+' km.':'Reparația a fost adăugată în istoricul mașinii.');}
-async function saveFleetDocument(){const p={action:'saveFleetDocument',adminEmail:authUser.email,vehicleId:document.getElementById('fdVehicle').value,type:document.getElementById('fdType').value,start:document.getElementById('fdStart').value,expiry:document.getElementById('fdExpiry').value,notes:document.getElementById('fdNotes').value};await fleetAdminSave(p,'Documentul a fost salvat.');}
+async function saveFleetVehicle(){const p={action:'saveVehicle',adminEmail:authUser.email,registration:document.getElementById('fvReg').value,model:document.getElementById('fvModel').value,vin:document.getElementById('fvVin').value,currentKm:document.getElementById('fvKm').value,driverName:document.getElementById('fvDriverName').value,serviceEveryKm:document.getElementById('fvServiceEvery').value,nextServiceKm:document.getElementById('fvNextServiceKm').value}; await fleetAdminSave(p,'Mașina a fost salvată.');}
+async function saveFleetService(){const type=document.getElementById('fsType').value;const km=Number(document.getElementById('fsKm').value||0);if(!document.getElementById('fsVehicle').value)return toast('Selectează mașina.',true);if(!document.getElementById('fsDate').value)return toast('Introdu data intervenției.',true);if(!km)return toast('Introdu kilometrajul la care s-a făcut intervenția.',true);if(type==='Revizie ulei + filtre')document.getElementById('fsNextKm').value=km+10000;const p={action:'saveFleetService',adminEmail:authUser.email,registration:document.getElementById('fsVehicle').value,type,date:document.getElementById('fsDate').value,km,cost:document.getElementById('fsCost').value,nextKm:document.getElementById('fsNextKm').value,notes:document.getElementById('fsNotes').value};await fleetAdminSave(p,type==='Revizie ulei + filtre'?'Revizia a fost salvată. Următoarea este la '+(km+10000).toLocaleString('ro-RO')+' km.':'Reparația a fost adăugată în istoricul mașinii.');}
+async function saveFleetDocument(){const p={action:'saveFleetDocument',adminEmail:authUser.email,registration:document.getElementById('fdVehicle').value,type:document.getElementById('fdType').value,start:document.getElementById('fdStart').value,expiry:document.getElementById('fdExpiry').value,notes:document.getElementById('fdNotes').value};await fleetAdminSave(p,'Documentul a fost salvat.');}
 async function fleetAdminSave(p,msg){
   try{
     const r=await apiCall('POST',p);if(!r?.ok)throw new Error(r?.error||'Eroare');
     if(p.action==='saveVehicle'){
       fleetData.isAdmin=true;
-      const saved=normalizeFleetVehicle({id:r.id,registration:p.registration,model:p.model,vin:p.vin,currentKm:p.currentKm,driverEmail:p.driverEmail,driverName:p.driverName,serviceEveryKm:p.serviceEveryKm,nextServiceKm:p.nextServiceKm});
-      const key=String(saved.id||saved.registration).toLowerCase();
+      const saved=normalizeFleetVehicle({registration:p.registration,model:p.model,vin:p.vin,currentKm:p.currentKm,driverName:p.driverName,serviceEveryKm:p.serviceEveryKm,nextServiceKm:p.nextServiceKm});
+      const key=String(saved.registration).toLowerCase();
       const list=(fleetData.vehicles||[]).map(normalizeFleetVehicle);
-      const idx=list.findIndex(v=>String(v.id||v.registration).toLowerCase()===key||String(v.registration).toLowerCase()===String(saved.registration).toLowerCase());
+      const idx=list.findIndex(v=>String(v.registration).toLowerCase()===key);
       if(idx>=0)list[idx]=Object.assign({},list[idx],saved);else list.push(saved);
       fleetData.vehicles=list;populateFleetVehicleSelects();document.getElementById('fleetAdminArea')?.classList.add('visible');renderFleetAdmin();
     }
