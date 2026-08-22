@@ -2982,8 +2982,10 @@ function populateFleetVehicleSelects(){
   ['fsVehicle','fdVehicle'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.innerHTML='<option value="">Selectează mașina</option>'+fleetData.vehicles.map(v=>`<option value="${escapeHtml(v.registration)}">${escapeHtml(vehicleLabel(v))}</option>`).join('');});
 }
 async function loadFleet(silent){
-  if(!authUser)return; try{
+  if(!authUser){alert('DEBUG loadFleet: authUser e null/undefined — nu se poate încărca flota');return;} try{
+    alert('DEBUG loadFleet: apelez API cu email=' + authUser.email + ' name=' + (authUser.name||'(gol)'));
     const res=await apiCall('GET',{action:'getFleetData',email:authUser.email,name:authUser.name||''});
+    alert('DEBUG loadFleet: răspuns primit, ok=' + res?.ok + ' vehicles=' + (res?.data?.vehicles?.length||0) + ' myVehicle=' + (res?.data?.myVehicle?.registration||'null'));
     if(!res||!res.ok)throw new Error(res?.error||'Nu s-a putut încărca flota');
     fleetData=res.data||fleetData; renderFleet();
     const n=(fleetData.alerts||[]).length, bd=document.getElementById('fleetTabBadge'); if(bd){bd.textContent=n;bd.style.display=n?'inline-flex':'none';}
