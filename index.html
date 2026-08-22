@@ -3051,7 +3051,15 @@ async function loadFleet(silent){
   try{
     const res=await apiCall('GET',{action:'getFleetData',email:authUser.email,name:authUser.name||'',_:Date.now()});
     if(!res||!res.ok)throw new Error(res?.error||'Nu s-a putut încărca flota');
-    fleetData=res.data||fleetData;
+    const previousFleetAdmin=fleetData.isAdmin===true;
+    fleetData=Object.assign({},fleetData,res.data||{});
+    if(previousFleetAdmin)fleetData.isAdmin=true;
+    if(!isFleetAdmin()){
+      try{
+        const roleRes=await apiCall('GET',{action:'checkStatus',email:authUser.email,_:Date.now()});
+        if(String(roleRes?.role||'').trim().toLowerCase()==='admin')fleetData.isAdmin=true;
+      }catch(_){}
+    }
     fleetData.vehicles=(fleetData.vehicles||[]).map(normalizeFleetVehicle);
     fleetData.myVehicle=fleetData.myVehicle?normalizeFleetVehicle(fleetData.myVehicle):null;
     renderFleet();
