@@ -2973,6 +2973,7 @@ function previewFleetReceipt(inp){
   if(!f){if(preview)preview.style.display='none';return;} if(f.size>20*1024*1024){toast('Poza este prea mare (max. 20 MB).',true);inp.value='';return;}
   const rd=new FileReader(); rd.onload=()=>{const im=new Image(); im.onload=()=>{let w=im.width,h=im.height,max=1600;if(Math.max(w,h)>max){const k=max/Math.max(w,h);w=Math.round(w*k);h=Math.round(h*k);}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);fleetReceiptData=c.toDataURL('image/jpeg',.78);if(preview){preview.src=fleetReceiptData;preview.style.display='block';}};im.src=rd.result;}; rd.readAsDataURL(f);
 }
+function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function fmtFleetDate(v){ if(!v)return '—'; const d=new Date(v); return isNaN(d)?String(v):d.toLocaleDateString('ro-RO'); }
 function daysUntil(v){if(!v)return null; const d=new Date(v+'T23:59:59'); return Math.ceil((d-Date.now())/86400000);}
 function vehicleLabel(v){return `${v.registration||'—'}${v.model?' · '+v.model:''}`;}
@@ -2982,12 +2983,10 @@ function populateFleetVehicleSelects(){
   ['fsVehicle','fdVehicle'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.innerHTML='<option value="">Selectează mașina</option>'+fleetData.vehicles.map(v=>`<option value="${escapeHtml(v.registration)}">${escapeHtml(vehicleLabel(v))}</option>`).join('');});
 }
 async function loadFleet(silent){
-  if(!authUser){alert('DEBUG loadFleet: authUser e null/undefined — nu se poate încărca flota');return;} try{
-    alert('DEBUG loadFleet: apelez API cu email=' + authUser.email + ' name=' + (authUser.name||'(gol)'));
+  if(!authUser)return; try{
     const res=await apiCall('GET',{action:'getFleetData',email:authUser.email,name:authUser.name||''});
-    alert('DEBUG loadFleet: răspuns primit, ok=' + res?.ok + ' vehicles=' + (res?.data?.vehicles?.length||0) + ' myVehicle=' + (res?.data?.myVehicle?.registration||'null'));
     if(!res||!res.ok)throw new Error(res?.error||'Nu s-a putut încărca flota');
-    fleetData=res.data||fleetData; try{renderFleet();}catch(renderErr){alert('DEBUG renderFleet EROARE: '+renderErr.message+'\n'+renderErr.stack);}
+    fleetData=res.data||fleetData; renderFleet();
     const n=(fleetData.alerts||[]).length, bd=document.getElementById('fleetTabBadge'); if(bd){bd.textContent=n;bd.style.display=n?'inline-flex':'none';}
     if(n&&!silent&&sessionStorage.getItem('ntsFleetAlertShown')!=='1'){sessionStorage.setItem('ntsFleetAlertShown','1');toast('⚠ Ai '+n+' notificări pentru mașina asignată.',false,true);}
   }catch(e){document.getElementById('fleetAlerts').innerHTML=`<div class="fleet-alert danger"><strong>Eroare flotă</strong><small>${escapeHtml(e.message)}</small></div>`;}
