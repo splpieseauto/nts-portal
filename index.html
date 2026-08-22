@@ -1005,9 +1005,11 @@ const WORK_TYPES = ['Swap','Preinstall','Clean-up','Install','Activități Anexe
 
 // State
 let selTechs=new Set(), selWork=null, stVal=null, dp=null;
-let fleetData = { vehicles:[], fuel:[], service:[], documents:[], alerts:[], myVehicle:null };
+let fleetData = { isAdmin:false, vehicles:[], fuel:[], service:[], documents:[], alerts:[], myVehicle:null };
 let fleetReceiptData = '';
 let fleetAutoLoadStarted = false;
+let fleetSyncTimer = null;
+let fleetSyncInFlight = false;
 let gData = { rapoarte:[], plan_url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRLEHiuD5sC3CtFx_vlHt9Cdg0q-XmmyQekp2-AUoysdUqVSMAFAzf8Xo4k337GYw/pubhtml', pontaj_url:'', mesaje:{} };
 
 // ╔══════════════════════════════════════════╗
@@ -1031,6 +1033,7 @@ function initApp() {
   syncAll(); injectMF();
   setTimeout(() => loadFleet(true), 800);
   startFleetAutoLoad();
+  startFleetPermanentSync();
   setInterval(() => syncAll(true), 30 * 1000); // 30 secunde
   setInterval(() => silentRecheck(), 30 * 60 * 1000);
 }
@@ -2637,6 +2640,14 @@ const SESS_TTL   = 100 * 365 * 24 * 60 * 60 * 1000; // Permanent
 
 let authUser  = null;
 
+function isFleetAdmin() {
+  const email = String(authUser?.email || '').trim().toLowerCase();
+  return fleetData?.isAdmin === true ||
+         email === String(ADMIN_MAIL || '').trim().toLowerCase() ||
+         authUser?.isAdmin === true ||
+         String(authUser?.role || '').trim().toLowerCase() === 'admin';
+}
+
 function refreshPontajRoleUI() {
   const fTeam = document.getElementById('fTeam');
   if (fTeam) {
@@ -2690,7 +2701,7 @@ async function stepSendCode() {
   }
   if (!name) { setErr('errEmail','Introdu și numele tău.'); return; }
 
-  authUser = { email, name, isAdmin: email === ADMIN_MAIL };
+  authUser = { email, name, isAdmin: email === String(ADMIN_MAIL||'').trim().toLowerCase() };
   setSpin('Se verifică accesul...');
 
   try {
@@ -3018,6 +3029,19 @@ function startFleetAutoLoad(){
   setTimeout(tick,300);
   setInterval(tick,1500);
 }
+function startFleetPermanentSync(){
+  if(fleetSyncTimer)return;
+  const sync=()=>syncFleet(true);
+  fleetSyncTimer=setInterval(sync,30*1000);
+  window.addEventListener('online',()=>syncFleet(true,true));
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncFleet(true,true);});
+  window.addEventListener('focus',()=>syncFleet(true,true));
+}
+async function syncFleet(silent=true, force=false){
+  if(!authUser||fleetSyncInFlight)return;
+  fleetSyncInFlight=true;
+  try{await loadFleet(silent);}finally{fleetSyncInFlight=false;}
+}
 async function loadFleet(silent){
   const box=document.getElementById('fleetMyVehicle');
   const alertsBox=document.getElementById('fleetAlerts');
@@ -3038,12 +3062,12 @@ async function loadFleet(silent){
   }catch(e){
     if(box)box.innerHTML=`<div><div class="fleet-reg">Flota nu s-a încărcat</div><div class="fleet-meta">${escapeHtml(e.message)}</div></div>`;
     if(alertsBox)alertsBox.innerHTML=`<div class="fleet-alert danger"><strong>Eroare flotă</strong><small>${escapeHtml(e.message)}</small></div>`;
-    const adm=!!(authUser?.isAdmin||String(authUser?.role||'').toLowerCase()==='admin');
+    const adm=isFleetAdmin();
     document.getElementById('fleetAdminArea')?.classList.toggle('visible',adm);
   }
 }
 function renderFleet(){
-  const adm=!!(authUser?.isAdmin||String(authUser?.role||'').toLowerCase()==='admin');
+  const adm=isFleetAdmin();
   if(adm)populateFleetVehicleSelects();
   const selectedFleetId=document.getElementById('fuelVehicle')?.value||'';
   const selectedFleetVehicle=(fleetData.vehicles||[]).map(normalizeFleetVehicle).find(x=>selectedFleetId&&(x.id===selectedFleetId||x.registration===selectedFleetId));
@@ -3069,10 +3093,10 @@ function renderFleetAdmin(){
 }
 function makeFleetTable(h,rows){if(!rows.length)return '<div class="fleet-empty">Nu există înregistrări.</div>';return `<div style="overflow:auto"><table class="fleet-table"><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(x=>`<td>${x??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;}
 async function saveQuickFuel(){
-  const km=Number(document.getElementById('fuelKm').value||0), adm=!!(authUser?.isAdmin||String(authUser?.role||'').toLowerCase()==='admin'), selectedId=document.getElementById('fuelVehicle')?.value||'';
+  const km=Number(document.getElementById('fuelKm').value||0), adm=isFleetAdmin(), selectedId=document.getElementById('fuelVehicle')?.value||'';
   const selectedVehicle=adm?(fleetData.vehicles||[]).map(normalizeFleetVehicle).find(v=>selectedId&&(v.id===selectedId||v.registration===selectedId)):fleetData.myVehicle;
   if(!selectedVehicle)return toast(adm?'Selectează mașina.':'Nu ai o mașină asignată.',true); if(!km)return toast('Introdu kilometrii actuali.',true); if(!fleetReceiptData)return toast('Fotografia bonului este obligatorie.',true); if(km<Number(selectedVehicle.currentKm||0))return toast('KM nu pot fi mai mici decât ultimul kilometraj.',true);
-  const b=document.getElementById('fuelSaveBtn');b.disabled=true;b.textContent='Se salvează…'; try{const res=await apiCall('POST',{action:'saveFuel',email:authUser.email,name:authUser.name||'',vehicleId:selectedVehicle.id||selectedVehicle.registration,km,liters:document.getElementById('fuelLiters').value,amount:document.getElementById('fuelAmount').value,receiptData:fleetReceiptData});if(!res?.ok)throw new Error(res?.error||'Eroare');toast('✅ Alimentarea a fost salvată.');document.getElementById('fuelKm').value='';document.getElementById('fuelLiters').value='';document.getElementById('fuelAmount').value='';document.getElementById('fuelReceipt').value='';document.getElementById('fuelReceiptPreview').style.display='none';fleetReceiptData='';await loadFleet();}catch(e){toast('Eroare: '+e.message,true);}finally{b.disabled=false;b.textContent='Salvează alimentarea';}
+  const b=document.getElementById('fuelSaveBtn');b.disabled=true;b.textContent='Se salvează…'; try{const res=await apiCall('POST',{action:'saveFuel',email:authUser.email,name:authUser.name||'',vehicleId:selectedVehicle.id||selectedVehicle.registration,km,liters:document.getElementById('fuelLiters').value,amount:document.getElementById('fuelAmount').value,receiptData:fleetReceiptData});if(!res?.ok)throw new Error(res?.error||'Eroare');toast('✅ Alimentarea a fost salvată.');document.getElementById('fuelKm').value='';document.getElementById('fuelLiters').value='';document.getElementById('fuelAmount').value='';document.getElementById('fuelReceipt').value='';document.getElementById('fuelReceiptPreview').style.display='none';fleetReceiptData='';await syncFleet(true,true);}catch(e){toast('Eroare: '+e.message,true);}finally{b.disabled=false;b.textContent='Salvează alimentarea';}
 }
 async function saveFleetVehicle(){const p={action:'saveVehicle',adminEmail:authUser.email,registration:document.getElementById('fvReg').value,model:document.getElementById('fvModel').value,vin:document.getElementById('fvVin').value,currentKm:document.getElementById('fvKm').value,driverEmail:document.getElementById('fvDriver').value,driverName:document.getElementById('fvDriverName').value,serviceEveryKm:document.getElementById('fvServiceEvery').value,nextServiceKm:document.getElementById('fvNextServiceKm').value}; await fleetAdminSave(p,'Mașina a fost salvată.');}
 async function saveFleetService(){const type=document.getElementById('fsType').value;const km=Number(document.getElementById('fsKm').value||0);if(!document.getElementById('fsVehicle').value)return toast('Selectează mașina.',true);if(!document.getElementById('fsDate').value)return toast('Introdu data intervenției.',true);if(!km)return toast('Introdu kilometrajul la care s-a făcut intervenția.',true);if(type==='Revizie ulei + filtre')document.getElementById('fsNextKm').value=km+10000;const p={action:'saveFleetService',adminEmail:authUser.email,vehicleId:document.getElementById('fsVehicle').value,type,date:document.getElementById('fsDate').value,km,cost:document.getElementById('fsCost').value,nextKm:document.getElementById('fsNextKm').value,notes:document.getElementById('fsNotes').value};await fleetAdminSave(p,type==='Revizie ulei + filtre'?'Revizia a fost salvată. Următoarea este la '+(km+10000).toLocaleString('ro-RO')+' km.':'Reparația a fost adăugată în istoricul mașinii.');}
@@ -3081,16 +3105,17 @@ async function fleetAdminSave(p,msg){
   try{
     const r=await apiCall('POST',p);if(!r?.ok)throw new Error(r?.error||'Eroare');
     if(p.action==='saveVehicle'){
+      fleetData.isAdmin=true;
       const saved=normalizeFleetVehicle({id:r.id,registration:p.registration,model:p.model,vin:p.vin,currentKm:p.currentKm,driverEmail:p.driverEmail,driverName:p.driverName,serviceEveryKm:p.serviceEveryKm,nextServiceKm:p.nextServiceKm});
       const key=String(saved.id||saved.registration).toLowerCase();
       const list=(fleetData.vehicles||[]).map(normalizeFleetVehicle);
       const idx=list.findIndex(v=>String(v.id||v.registration).toLowerCase()===key||String(v.registration).toLowerCase()===String(saved.registration).toLowerCase());
       if(idx>=0)list[idx]=Object.assign({},list[idx],saved);else list.push(saved);
-      fleetData.vehicles=list;populateFleetVehicleSelects();renderFleetAdmin();
+      fleetData.vehicles=list;populateFleetVehicleSelects();document.getElementById('fleetAdminArea')?.classList.add('visible');renderFleetAdmin();
     }
     toast('✅ '+msg);
     if(r.nocors)await new Promise(resolve=>setTimeout(resolve,1800));
-    await loadFleet(true);
+    await syncFleet(true,true);
   }catch(e){toast('Eroare: '+e.message,true);}
 }
 
