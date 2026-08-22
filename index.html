@@ -1007,6 +1007,7 @@ const WORK_TYPES = ['Swap','Preinstall','Clean-up','Install','Activități Anexe
 let selTechs=new Set(), selWork=null, stVal=null, dp=null;
 let fleetData = { vehicles:[], fuel:[], service:[], documents:[], alerts:[], myVehicle:null };
 let fleetReceiptData = '';
+let fleetAutoLoadStarted = false;
 let gData = { rapoarte:[], plan_url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRLEHiuD5sC3CtFx_vlHt9Cdg0q-XmmyQekp2-AUoysdUqVSMAFAzf8Xo4k337GYw/pubhtml', pontaj_url:'', mesaje:{} };
 
 // ╔══════════════════════════════════════════╗
@@ -1029,6 +1030,7 @@ function initApp() {
   buildTechDropdowns();
   syncAll(); injectMF();
   setTimeout(() => loadFleet(true), 800);
+  startFleetAutoLoad();
   setInterval(() => syncAll(true), 30 * 1000); // 30 secunde
   setInterval(() => silentRecheck(), 30 * 60 * 1000);
 }
@@ -2585,12 +2587,12 @@ document.getElementById('btnDis').addEventListener('click',()=>document.getEleme
 window.addEventListener('appinstalled',()=>{document.getElementById('ib').classList.add('hidden');toast('✔ NTS Portal instalat!');});
 if('serviceWorker' in navigator){
   const swCode = `
-    const CACHE = 'nts-portal-v1';
+    const CACHE = 'nts-portal-v2';
     self.addEventListener('install', e => {
       self.skipWaiting();
     });
     self.addEventListener('activate', e => {
-      e.waitUntil(clients.claim());
+      e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => clients.claim()));
     });
     self.addEventListener('fetch', e => {
       // Cache-first for same-origin, network-first for API calls
@@ -3004,11 +3006,24 @@ function populateFleetVehicleSelects(){
     else if(id==='fuelVehicle'&&vehicles.length)el.value=vehicles[0].id||vehicles[0].registration;
   });
 }
+function startFleetAutoLoad(){
+  if(fleetAutoLoadStarted)return;
+  fleetAutoLoadStarted=true;
+  const tick=()=>{
+    const page=document.getElementById('p5'), box=document.getElementById('fleetMyVehicle');
+    if(!page?.classList.contains('active')||!box)return;
+    const txt=box.textContent||'';
+    if(txt.includes('Se încarcă')||txt.includes('Se incarca'))loadFleet(false);
+  };
+  setTimeout(tick,300);
+  setInterval(tick,1500);
+}
 async function loadFleet(silent){
   const box=document.getElementById('fleetMyVehicle');
   const alertsBox=document.getElementById('fleetAlerts');
   if(!authUser){
-    if(!silent)setTimeout(()=>loadFleet(silent),500);
+    if(box&&!silent)box.innerHTML='<div><div class="fleet-reg">Se verifică utilizatorul…</div><div class="fleet-meta">Așteaptă autentificarea.</div></div>';
+    setTimeout(()=>loadFleet(silent),500);
     return;
   }
   try{
