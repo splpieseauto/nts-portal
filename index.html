@@ -1010,6 +1010,7 @@ let fleetReceiptData = '';
 let fleetAutoLoadStarted = false;
 let fleetSyncTimer = null;
 let fleetSyncInFlight = false;
+let fleetAdminCheckInFlight = false;
 let gData = { rapoarte:[], plan_url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRLEHiuD5sC3CtFx_vlHt9Cdg0q-XmmyQekp2-AUoysdUqVSMAFAzf8Xo4k337GYw/pubhtml', pontaj_url:'', mesaje:{} };
 
 // ╔══════════════════════════════════════════╗
@@ -1048,7 +1049,7 @@ function sw(i, btn) {
   // Refresh relevant tab
   if(i===1) renderPlan();
   if(i===3) renderP();
-  if(i===4) loadFleet();
+  if(i===4){ensureFleetAdminVisible();loadFleet();}
 }
 
 // ╔══════════════════════════════════════════╗
@@ -3017,6 +3018,26 @@ function populateFleetVehicleSelects(){
     else if(id==='fuelVehicle'&&vehicles.length)el.value=vehicles[0].id||vehicles[0].registration;
   });
 }
+async function ensureFleetAdminVisible(){
+  if(!authUser||isFleetAdmin()||fleetAdminCheckInFlight)return isFleetAdmin();
+  fleetAdminCheckInFlight=true;
+  try{
+    const res=await apiCall('GET',{action:'checkStatus',email:authUser.email,_:Date.now()});
+    if(String(res?.role||'').trim().toLowerCase()==='admin'){
+      fleetData.isAdmin=true;
+      document.getElementById('fleetAdminArea')?.classList.add('visible');
+      document.getElementById('fuelAdminVehicleWrap')?.classList.add('visible');
+      populateFleetVehicleSelects();
+      renderFleetAdmin();
+      return true;
+    }
+  }catch(e){
+    console.warn('NTS fleet admin check failed',e.message);
+  }finally{
+    fleetAdminCheckInFlight=false;
+  }
+  return isFleetAdmin();
+}
 function startFleetAutoLoad(){
   if(fleetAutoLoadStarted)return;
   fleetAutoLoadStarted=true;
@@ -3050,6 +3071,7 @@ async function loadFleet(silent){
     setTimeout(()=>loadFleet(silent),500);
     return;
   }
+  await ensureFleetAdminVisible();
   try{
     const res=await apiCall('GET',{action:'getFleetData',email:authUser.email,name:authUser.name||'',_:Date.now()});
     if(!res||!res.ok)throw new Error(res?.error||'Nu s-a putut încărca flota');
@@ -3062,8 +3084,9 @@ async function loadFleet(silent){
   }catch(e){
     if(box)box.innerHTML=`<div><div class="fleet-reg">Flota nu s-a încărcat</div><div class="fleet-meta">${escapeHtml(e.message)}</div></div>`;
     if(alertsBox)alertsBox.innerHTML=`<div class="fleet-alert danger"><strong>Eroare flotă</strong><small>${escapeHtml(e.message)}</small></div>`;
-    const adm=isFleetAdmin();
+    const adm=await ensureFleetAdminVisible();
     document.getElementById('fleetAdminArea')?.classList.toggle('visible',adm);
+    document.getElementById('fuelAdminVehicleWrap')?.classList.toggle('visible',adm);
   }
 }
 function renderFleet(){
