@@ -2643,8 +2643,11 @@ let authUser  = null;
 
 function isFleetAdmin() {
   const email = String(authUser?.email || '').trim().toLowerCase();
+  const adminChip = document.getElementById('admChip');
+  const adminChipVisible = !!adminChip && getComputedStyle(adminChip).display !== 'none';
   return fleetData?.isAdmin === true ||
          email === String(ADMIN_MAIL || '').trim().toLowerCase() ||
+         adminChipVisible ||
          authUser?.isAdmin === true ||
          String(authUser?.role || '').trim().toLowerCase() === 'admin';
 }
