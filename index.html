@@ -1000,15 +1000,15 @@ canvas#sigCanvas{display:block;width:100%;height:160px;cursor:crosshair;}
         <div class="pv-type-selector">
           <label>Tip proces verbal</label>
           <div class="pv-type-btns">
-            <button class="pv-type-btn active" onclick="pvSelectType('predare',this)">📤 PREDARE</button>
-            <button class="pv-type-btn" onclick="pvSelectType('primire',this)">📥 PRIMIRE</button>
+            <button class="pv-type-btn active" onclick="pvSelectType('primire',this)">📥 PRIMIRE</button>
+            <button class="pv-type-btn" onclick="pvSelectType('predare',this)">📤 PREDARE</button>
           </div>
         </div>
       </div>
 
       <!-- SECȚIUNEA 1: SCULE PERSONALE -->
       <div class="pv-section">
-        <div class="pv-section-header" onclick="togglePvSection(this)">
+        <div class="pv-section-header collapsed" onclick="togglePvSection(this)">
           <span>🔧 Scule Personale</span><span class="pv-chevron">▼</span>
         </div>
         <div class="pv-section-body" id="pvSculeSec">
@@ -1022,7 +1022,7 @@ canvas#sigCanvas{display:block;width:100%;height:160px;cursor:crosshair;}
 
       <!-- SECȚIUNEA 2: PPE -->
       <div class="pv-section">
-        <div class="pv-section-header" onclick="togglePvSection(this)">
+        <div class="pv-section-header collapsed" onclick="togglePvSection(this)">
           <span>🦺 Echipament PPE</span><span class="pv-chevron">▼</span>
         </div>
         <div class="pv-section-body" id="pvPpeSec">
@@ -1036,7 +1036,7 @@ canvas#sigCanvas{display:block;width:100%;height:160px;cursor:crosshair;}
 
       <!-- SECȚIUNEA 3: ECHIPAMENT (HAINE) -->
       <div class="pv-section">
-        <div class="pv-section-header" onclick="togglePvSection(this)">
+        <div class="pv-section-header collapsed" onclick="togglePvSection(this)">
           <span>👔 Echipament Lucru</span><span class="pv-chevron">▼</span>
         </div>
         <div class="pv-section-body" id="pvEchipSec">
@@ -1050,7 +1050,7 @@ canvas#sigCanvas{display:block;width:100%;height:160px;cursor:crosshair;}
 
       <!-- SECȚIUNEA 4: INVENTAR AUTO -->
       <div class="pv-section">
-        <div class="pv-section-header" onclick="togglePvSection(this)">
+        <div class="pv-section-header collapsed" onclick="togglePvSection(this)">
           <span>🚗 Inventar Auto</span><span class="pv-chevron">▼</span>
         </div>
         <div class="pv-section-body" id="pvAutoSec">
@@ -1067,7 +1067,7 @@ canvas#sigCanvas{display:block;width:100%;height:160px;cursor:crosshair;}
       <div class="pv-section">
         <div class="pv-section-header pv-no-collapse">📷 Fotografie</div>
         <div class="pv-section-body">
-          <label class="receipt-box">📷 <b>Fotografiază / Atașează</b><br><span style="font-size:12px;color:var(--muted)">Foto opțională procesului verbal</span>
+          <label class="receipt-box">📷 <b>Fotografiază / Atașează</b><br><span style="font-size:12px;color:var(--muted)">Foto la produsele primite sau predate</span>
             <input id="pvPhoto" type="file" accept="image/*" capture="environment" onchange="pvPreviewPhoto(this)">
             <img id="pvPhotoPreview" class="receipt-preview" alt="Foto PV">
           </label>
@@ -3249,7 +3249,7 @@ const PV_DATA = {
 
 let pvCustomCounters = {scule:0, ppe:0, echip:0, auto:0};
 let pvPhotoData = '';
-let pvType = 'predare'; // 'predare' or 'primire'
+let pvType = 'primire'; // 'primire' or 'predare'
 
 function pvSelectType(type, btn){
   pvType = type;
