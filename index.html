@@ -3274,23 +3274,30 @@ function pvRenderSection(sec){
   const list = document.getElementById(sec==='scule'?'pvSculeList':sec==='ppe'?'pvPpeList':sec==='echip'?'pvEchipList':'pvAutoList');
   if(!list) return;
   const items = PV_DATA[sec];
+  const labels = {
+    scule: {name:'Denumire', qty:'Nr. bucăți'},
+    ppe:   {name:'Denumire', qty:'Nr. bucăți', f1:'Tip / Producător', f2:'Serie produs'},
+    echip: {name:'Denumire', qty:'Nr. bucăți', f1:'Model / Brand', f2:'Mărime (S/M/L/XL/nr.)'},
+    auto:  {name:'Denumire', qty:'Nr. bucăți', f1:'Tip / Producător', f2:'Serie produs'}
+  };
+  const lb = labels[sec];
   let html = '';
   items.forEach((it,i)=>{
     const id = 'pv_'+sec+'_'+i;
     html += '<div class="pv-item">';
-    html += `<input type="checkbox" id="${id}" checked>`;
+    html += `<input type="checkbox" id="${id}">`;
     html += '<div class="pv-item-info">';
-    html += `<div class="pv-item-row"><input class="pv-item-name-input" value="${escapeHtml(it.name)}" data-role="name"><span class="pv-qty-label">Buc:</span><input class="pv-item-qty-input" type="number" min="0" value="${it.qty}" data-role="qty"></div>`;
+    html += `<div class="pv-item-row"><input class="pv-item-name-input" value="${escapeHtml(it.name)}" placeholder="${lb.name}" data-role="name"><span class="pv-qty-label">Buc:</span><input class="pv-item-qty-input" type="number" min="0" value="${it.qty}" placeholder="${lb.qty}" data-role="qty"></div>`;
     if(sec==='ppe' || sec==='auto'){
       html += '<div class="pv-item-fields">';
-      html += `<input placeholder="Tip / Producător" value="${escapeHtml(it.tip||'')}" data-role="tip">`;
-      html += `<input placeholder="Serie" value="${escapeHtml(it.serie||'')}" data-role="serie">`;
+      html += `<input placeholder="${lb.f1}" value="${escapeHtml(it.tip||'')}" data-role="tip">`;
+      html += `<input placeholder="${lb.f2}" value="${escapeHtml(it.serie||'')}" data-role="serie">`;
       html += '</div>';
     }
     if(sec==='echip'){
       html += '<div class="pv-item-fields">';
-      html += `<input placeholder="Model / Denumire" value="${escapeHtml(it.model||'')}" data-role="model">`;
-      html += `<input placeholder="Mărime" value="${escapeHtml(it.marime||'')}" data-role="marime">`;
+      html += `<input placeholder="${lb.f1}" value="${escapeHtml(it.model||'')}" data-role="model">`;
+      html += `<input placeholder="${lb.f2}" value="${escapeHtml(it.marime||'')}" data-role="marime">`;
       html += '</div>';
     }
     html += '</div></div>';
@@ -3314,9 +3321,9 @@ function pvAddCustom(sec){
   const div = document.createElement('div');
   div.className = 'pv-item pv-item-custom';
   let fields = '';
-  if(sec==='ppe'||sec==='auto') fields = '<div class="pv-item-fields"><input placeholder="Tip / Producător" data-role="tip"><input placeholder="Serie" data-role="serie"></div>';
-  if(sec==='echip') fields = '<div class="pv-item-fields"><input placeholder="Model / Denumire" data-role="model"><input placeholder="Mărime" data-role="marime"></div>';
-  div.innerHTML = `<input type="checkbox" id="${cid}" checked><div class="pv-item-info"><div class="pv-item-row"><input class="pv-item-name-input" value="${escapeHtml(name)}" data-role="name"><span class="pv-qty-label">Buc:</span><input class="pv-item-qty-input" type="number" min="0" value="1" data-role="qty"></div>${fields}</div><button class="pv-item-del" onclick="this.closest('.pv-item').remove()" title="Șterge">✕</button>`;
+  if(sec==='ppe'||sec==='auto') fields = '<div class="pv-item-fields"><input placeholder="Tip / Producător" data-role="tip"><input placeholder="Serie produs" data-role="serie"></div>';
+  if(sec==='echip') fields = '<div class="pv-item-fields"><input placeholder="Model / Brand" data-role="model"><input placeholder="Mărime (S/M/L/XL/nr.)" data-role="marime"></div>';
+  div.innerHTML = `<input type="checkbox" id="${cid}" checked><div class="pv-item-info"><div class="pv-item-row"><input class="pv-item-name-input" value="${escapeHtml(name)}" placeholder="Denumire produs" data-role="name"><span class="pv-qty-label">Buc:</span><input class="pv-item-qty-input" type="number" min="0" value="1" placeholder="Nr." data-role="qty"></div>${fields}</div><button class="pv-item-del" onclick="this.closest('.pv-item').remove()" title="Șterge">✕</button>`;
   list.appendChild(div);
   inp.value = '';
 }
